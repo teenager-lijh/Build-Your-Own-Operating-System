@@ -181,7 +181,7 @@ p_mode_start:
 ;-------------   创建页目录及页表   ---------------
 setup_page:
 ;先把页目录占用的空间逐字节清0
-   mov ecx, 4096
+   mov ecx, 4096 ; 循环计数器 因为一页刚好是 4096B 每次清零 1B 
    mov esi, 0
 .clear_page_dir:
    mov byte [PAGE_DIR_TABLE_POS + esi], 0
@@ -191,26 +191,34 @@ setup_page:
 ;开始创建页目录项(PDE)
 .create_pde:				     ; 创建Page Directory Entry
    mov eax, PAGE_DIR_TABLE_POS
-   add eax, 0x1000 			     ; 此时eax为第一个页表的位置及属性
+   add eax, 0x1000 			     ; 此时eax为第一个页表的位置及属性 跳过一个表的长度
    mov ebx, eax				     ; 此处为ebx赋值，是为.create_pte做准备，ebx为基址。
+   ; 用 ebx 拷贝一份 eax 中存储的地址， 而 eax 当作目录项中的值 
 
 ;   下面将页目录项0和0xc00都存为第一个页表的地址，
 ;   一个页表可表示4MB内存,这样0xc03fffff以下的地址和0x003fffff以下的地址都指向相同的页表，
 ;   这是为将地址映射为内核地址做准备
    or eax, PG_US_U | PG_RW_W | PG_P	     ; 页目录项的属性RW和P位为1,US为1,表示用户属性,所有特权级别都可以访问.
-   mov [PAGE_DIR_TABLE_POS + 0x0], eax       ; 第1个目录项,在页目录表中的第1个目录项写入第一个页表的位置(0x101000)及属性(7)
+   mov [PAGE_DIR_TABLE_POS + 0x0], eax       ; 第0号即第1个目录项,在页目录表中的第1个目录项写入第一个页表的位置(0x101000)及属性(7)
    mov [PAGE_DIR_TABLE_POS + 0xc00], eax     ; 一个页表项占用4字节,0xc00表示第768个页表占用的目录项,0xc00以上的目录项用于内核空间,
 					     ; 也就是页表的0xc0000000~0xffffffff共计1G属于内核,0x0~0xbfffffff共计3G属于用户进程.
    sub eax, 0x1000
    mov [PAGE_DIR_TABLE_POS + 4092], eax	     ; 使最后一个目录项指向页目录表自己的地址
+	; 4 * 1023 = 4092  这样就可以通过访问最后一个目录项来访问页表自身了，虚拟地址也就转化成了指向自身表头的物理地址了
+
+; 在上边一共创建了 3 个页目录项
 
 ;下面创建页表项(PTE)
-   mov ecx, 256				     ; 1M低端内存 / 每页大小4k = 256
+; 这里让一级页表的第 0 号页表中的每一项顺次的指满了物理地址的低 1MB 的内存
+; 这样就完成了 低1MB 的虚拟地址对应上了 真实的物理地址的低 1M
+; 通过这个操作就可以使用直接用虚拟地址的 低1M 空间访问真是物理空间的 低1M 空间了
+   mov ecx, 256				     ; 1M低端内存 / 每页大小4k => 4KB * 256 = 1MB
    mov esi, 0
-   mov edx, PG_US_U | PG_RW_W | PG_P	     ; 属性为7,US=1,RW=1,P=1
+   mov edx, PG_US_U | PG_RW_W | PG_P	     ; 属性为7,US=1,RW=1,P=1 而 edx 的高20位是 0
+ ; edx 的高 20 位是 0  
 .create_pte:				     ; 创建Page Table Entry
    mov [ebx+esi*4],edx			     ; 此时的ebx已经在上面通过eax赋值为0x101000,也就是第一个页表的地址 
-   add edx,4096
+   add edx,4096 ; 4096 = 0x1000 也就是十六进制的第 13 位为 1, 一个页表项对应一个物理页，所以在创建下一个页表项的时候应该让它的地址增加 4096 个单位
    inc esi
    loop .create_pte
 
@@ -220,12 +228,28 @@ setup_page:
    or eax, PG_US_U | PG_RW_W | PG_P  ; 页目录项的属性US,RW和P位都为1
    mov ebx, PAGE_DIR_TABLE_POS
    mov ecx, 254			     ; 范围为第769~1022的所有目录项数量
-   mov esi, 769
-.create_kernel_pde:
+	                             ; 1023 号用来指向自己开始的位置了
+ ; 1022 - 769 + 1 = 254 
+   mov esi, 769 ; 指令了开始格式化的 pde 的位置 , 真是位置等于 base+esi*4
+
+
+
+.create_kernel_pde:  ; 创建内核的 页目录项 （二级页表中的项）
+; 每个页中可以容纳 1K=1024 个4B大小的项
+
    mov [ebx+esi*4], eax
    inc esi
    add eax, 0x1000
    loop .create_kernel_pde
    ret
 
- 
+; 操作系统的内核最终是位于物理地址的 低端 1MB 内
+; 但是对于应用虚拟地址空间而言会将高端处的内存的前 1MB 映射到真是物理内存的低 1MB 上
+; 页目录项的最后一项的地址是页目录表的起始地址.....但是这样页目录表在第二次转化的时候不
+; 就被当作页表来使用了吗.
+; 而刚好页目录中的第 0 项记录的是第 0 个页表的起始地址 0x101000
+; 页 1 和 页 768 都指向了低 1M 的空间
+; 0xfffff000～0xffffffff -> 0x000000100000～0x000000100fff
+; 这样就相当于经过了两次 页目录中最后一项的转化最终把 高 20 位置变成了 0x00100 也就是页目录的其实地址的高 20 位了
+
+; 所以说也仅仅能通过虚拟地址访问到页目录表和第 0 号页表而已。。。其他的访问不到哦？ 
