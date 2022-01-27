@@ -1,16 +1,28 @@
-gcc -m32 -c -o /home/lijh/Build-Your-Own-Operating-System/kernel/main.o \
-/home/lijh/Build-Your-Own-Operating-System/kernel/hello.c
+root=/home/lijh/Build-Your-Own-Operating-System
 
-echo "gcc success \n"
+echo "gcc begin ------------------------"
 
-ld /home/lijh/Build-Your-Own-Operating-System/kernel/main.o -Ttext 0xc0001500 -e main -o /home/lijh/Build-Your-Own-Operating-System/kernel/kernel.bin -m elf_i386
+gcc -m32 -c -I $root/lib/kernel -o $root/kernel/main.o $root/kernel/main.c 
 
-echo "ld success"
-
-dd if=/home/lijh/Build-Your-Own-Operating-System/kernel/kernel.bin of=/home/lijh/Build-Your-Own-Operating-System/hd60M.img bs=512 count=200 seek=9 conv=notrunc
+echo "gcc end --------------------------"
 
 
-echo "dd success"
+echo "nasm begin -----------------------"
+
+nasm -f elf -o $root/lib/kernel/print.o $root/lib/kernel/print.S
+
+echo "nasm end -------------------------"
 
 
+echo "ld begin -------------------------"
 
+ld $root/kernel/main.o $root/lib/kernel/print.o -Ttext 0xc0001500 -e main -o $root/kernel/kernel.bin -m elf_i386
+
+echo "ld end ---------------------------"
+
+
+echo "dd begin -------------------------"
+
+dd if=$root/kernel/kernel.bin of=$root/hd60M.img bs=512 count=200 seek=9 conv=notrunc
+
+echo "dd end ---------------------------"
