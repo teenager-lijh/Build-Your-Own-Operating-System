@@ -7,6 +7,7 @@ gcc -m32 -c -fno-builtin \
     -I $root/lib \
     -I $root/lib/kernel \
     -I $root/kernel \
+    -I $root/device \
     -o $root/build/main.o \
     $root/kernel/main.c
 
@@ -15,6 +16,7 @@ gcc -m32 -c -fno-builtin \
     -I $root/lib \
     -I $root/lib/kernel \
     -I $root/kernel \
+    -I $root/device \
     -o $root/build/interrupt.o \
     $root/kernel/interrupt.c
 
@@ -22,9 +24,19 @@ gcc -m32 -c -fno-builtin \
     -fno-stack-protector \
     -I $root/lib \
     -I $root/lib/kernel \
+    -I $root/device \
     -I $root/kernel \
     -o $root/build/init.o \
     $root/kernel/init.c
+
+gcc -m32 -c -fno-builtin \
+    -fno-stack-protector \
+    -I $root/lib \
+    -I $root/lib/kernel \
+    -I $root/device \
+    -I $root/kernel \
+    -o $root/build/timer.o \
+    $root/device/timer.c
 
 echo "gcc end --------------------------"
 
@@ -52,7 +64,8 @@ ld -Ttext 0xc0001500 \
     $root/build/print.o \
     $root/build/kernel.o \
     $root/build/interrupt.o \
-    $root/build/init.o
+    $root/build/init.o \
+    $root/build/timer.o
 
 echo "ld end ---------------------------"
 
