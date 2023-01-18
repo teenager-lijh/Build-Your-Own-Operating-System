@@ -32,4 +32,3 @@ void malloc_init(void);
 uint32_t* pte_ptr(uint32_t vaddr);
 uint32_t* pde_ptr(uint32_t vaddr);
 #endif
-

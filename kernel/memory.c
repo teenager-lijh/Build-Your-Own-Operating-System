@@ -228,4 +228,3 @@ void mem_init() {
    mem_pool_init(mem_bytes_total);	  // 初始化内存池
    put_str("mem_init done\n");
 }
-
