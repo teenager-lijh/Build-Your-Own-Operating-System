@@ -1,3 +1,4 @@
 configuration/hd60M.img
 *.o
 *.bin
+build/
