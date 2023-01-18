@@ -378,4 +378,3 @@ rd_disk_m_32:
 
       loop .go_on_read
       ret
-

@@ -237,4 +237,3 @@ set_cursor:
    out dx, al
    popad
    ret
-
